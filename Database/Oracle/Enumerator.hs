@@ -24,6 +24,8 @@ module Database.Oracle.Enumerator
   , sql, sqlbind, prefetch, cmdbind
   , StmtHandle, Out(..)
   , module Database.Enumerator
+  , bindPArr
+  , prepareCommandArr
   )
 where
 
@@ -49,6 +51,8 @@ import Data.Int
 import Data.Time
 import System.IO (hPutStrLn, stderr)
 import System.Time
+import qualified Data.ByteString as ByteString
+import qualified Data.ByteString.UTF8 as BSUTF8
 
 
 -- --------------------------------------------------------------------
@@ -394,7 +398,12 @@ defineCol session stmt posn bufsize sqldatatype = inSession session
   (\_ err _ -> OCI.defineByPos err (stmtHandle stmt) posn bufsize sqldatatype)
   (closeStmt session (stmtHandle stmt))
 
-bindByPos :: Session -> PreparedStmtObj -> Int -> CShort -> OCI.BufferPtr -> Int -> CInt -> IO ()
+bindByPosArr :: Session -> PreparedStmtObj -> Int -> [Word8] -> Int -> CInt -> [CShort] -> [Int] -> IO [IO ()]
+bindByPosArr session stmt posn arrptr maxSze sqltype nullInd elemLens = inSession session
+  (\_ err _ -> OCI.bindByPosArr err (stmtHandle stmt) posn arrptr maxSze sqltype nullInd elemLens)
+  (closeStmt session (stmtHandle stmt))
+
+bindByPos :: Session -> PreparedStmtObj -> Int -> CShort -> OCI.BufferPtr -> Int -> CInt -> IO [IO ()]
 bindByPos session stmt posn nullind val bufsize sqldatatype = inSession session
   (\_ err _ -> OCI.bindByPos err (stmtHandle stmt) posn nullind val bufsize sqldatatype)
   (closeStmt session (stmtHandle stmt))
@@ -462,7 +471,7 @@ cmdbind sql parms = CommandBind sql parms
 
 instance Command CommandBind Session where
   executeCommand sess (CommandBind sqltext bas) = do
-    let (PreparationA pa) = prepareStmt' 0 sqltext FreeWithQuery CommandType
+    let (PreparationA pa) = prepareStmt' 0 sqltext FreeWithQuery (CommandType 1)
     ps <- pa sess
     bindRun sess ps bas (\(BoundStmt bs) -> do
       n <- getRowCount sess (stmtHandle bs)
@@ -503,7 +512,7 @@ data StmtLifetime = FreeWithQuery | FreeManually
 --      but for commands we ignore the call (do nothing), because the
 --      output buffers will already have been filled.
 
-data StmtType = SelectType | CommandType
+data StmtType = SelectType | CommandType Int
 
 data PreparedStmtObj = PreparedStmtObj
       { stmtLifetime :: StmtLifetime
@@ -521,7 +530,7 @@ data PreparedStmtObj = PreparedStmtObj
 
 beginsWithSelect "" = False
 beginsWithSelect text = isPrefixOf "select" . map toLower $ text
-inferStmtType text = if beginsWithSelect text then SelectType else CommandType
+inferStmtType text = if beginsWithSelect text then SelectType else CommandType 1
 
 prepareQuery :: QueryString -> PreparationA Session PreparedStmtObj
 prepareQuery (QueryString sqltext) =
@@ -532,8 +541,12 @@ prepareLargeQuery count (QueryString sqltext) =
   prepareStmt' count sqltext FreeManually SelectType
 
 prepareCommand :: QueryString -> PreparationA Session PreparedStmtObj
-prepareCommand (QueryString sqltext) =
-  prepareStmt' 0 sqltext FreeManually CommandType
+prepareCommand qs =
+  prepareCommandArr qs 1
+
+prepareCommandArr :: QueryString -> Int -> PreparationA Session PreparedStmtObj
+prepareCommandArr (QueryString sqltext) iterations = 
+  prepareStmt' 0 sqltext FreeManually (CommandType iterations)
 
 -- | Seems like an odd alternative to 'prepareCommand' (what is a large command?)
 -- but is actually useful for when the outer query it a procedure call that
@@ -545,7 +558,7 @@ prepareCommand (QueryString sqltext) =
 
 prepareLargeCommand :: Int -> QueryString -> PreparationA Session PreparedStmtObj
 prepareLargeCommand n (QueryString sqltext) =
-  prepareStmt' n sqltext FreeManually CommandType
+  prepareStmt' n sqltext FreeManually (CommandType 1)
 
 prepareStmt' count sqltext lifetime stmtype =
   PreparationA (\sess -> do
@@ -567,18 +580,20 @@ newPreparedStmt lifetime iteration sess stmt = do
 
 newtype BoundStmt = BoundStmt { boundStmt :: PreparedStmtObj }
 
-type BindObj = Int -> IO ()
+type BindObj = Int -> IO [IO ()]
 newtype Out a = Out a
 
 instance IPrepared PreparedStmtObj Session BoundStmt BindObj where
   bindRun sess stmt bas action = do
-    sequence_ (zipWith (\i (BindA ba) -> ba sess stmt i) [1..] bas)
+    finalizers <- (sequence (zipWith (\i (BindA ba) -> ba sess stmt i) [1..] bas) :: IO [[IO ()]])
     let iteration = case (stmtType stmt) of
           SelectType -> 0
-          CommandType -> 1
+          (CommandType itCount) -> itCount
     execute sess (stmtHandle stmt) iteration
     writeIORef (stmtCursors stmt) []
-    action (BoundStmt stmt)
+    r <- action (BoundStmt stmt)
+    sequence_ . concat $ finalizers
+    return r
   destroyStmt sess pstmt = closeStmt sess (stmtHandle pstmt)
 
 instance DBBind (Maybe String) Session PreparedStmtObj BindObj where
@@ -612,6 +627,29 @@ instance DBBind (Maybe UTCTime) Session PreparedStmtObj BindObj where
 
 instance DBBind (Out (Maybe UTCTime)) Session PreparedStmtObj BindObj where
   bindP (Out v) = makeOutputBindAction v
+
+-- instance (DBBind a Session PreparedStmtObj BindObj, OracleBind a)
+--     => DBBind [a] Session PreparedStmtObj BindObj where
+bindPArr :: (OracleBind a) => [a] -> BindA Session PreparedStmtObj BindObj
+bindPArr l = BindA (\ses st -> bind ses st l)
+  where
+    bind sess stmt l pos = do
+      word8s <- toListWord8s l
+      bindByPosArr sess stmt pos word8s maxSz dataTp nullInd elemLens
+      where
+        toListWord8s :: (OracleBind a) => [a] -> IO [Word8]
+        -- Clean up here -- would rather not be peeking to get the buffer
+        toListWord8s l = do
+          values <- mapM (\x -> bindWithValue x (peekArray (bindDataSize x))) l
+          return $ concat . fmap (take maxSz . (\y -> y ++ (repeat 0))) $ values
+        maxSz :: Int
+        maxSz = maximum . fmap bindDataSize $ l
+        dataTp :: CInt
+        dataTp = bindType . head $ l
+        nullInd :: [CShort]
+        nullInd = fmap bindNullInd l
+        elemLens :: [Int]
+        elemLens = fmap bindDataSize l
 
 -- StmtHandles (i.e. RefCursors) are output only, I think
 -- (altough you have to pass a valid one in, or it'll hurl).
@@ -650,7 +688,7 @@ instance (Show a) => DBBind (Out (Maybe a)) Session PreparedStmtObj BindObj wher
 makeBindAction x = BindA (\ses st -> bindMaybe ses st x)
 
 bindMaybe :: (OracleBind a)
-  => Session -> PreparedStmtObj -> Maybe a -> Int -> IO ()
+  => Session -> PreparedStmtObj -> Maybe a -> Int -> IO [IO ()]
 bindMaybe sess stmt v pos =
   bindWithValue v $ \ptrv -> do
     bindByPos sess stmt pos (bindNullInd v) (castPtr ptrv) (bindDataSize v) (bindType v)
@@ -661,7 +699,7 @@ bindMaybe sess stmt v pos =
 makeOutputBindAction v = BindA (\sess stmt -> bindOutputMaybe sess stmt v)
 
 bindOutputMaybe :: (OracleBind a)
-  => Session -> PreparedStmtObj -> Maybe a -> Int -> IO ()
+  => Session -> PreparedStmtObj -> Maybe a -> Int -> IO [IO ()]
 bindOutputMaybe sess stmt v pos = do
       buffer <- mallocForeignPtrBytes (bindBufferSize v)
       nullind <- mallocForeignPtr
@@ -682,6 +720,7 @@ bindOutputMaybe sess stmt v pos = do
           , colBufSqlType = (bindType v)
           }
       appendOutputBindBuffer stmt colbuf
+      return []
 
 -- If the bind values are output, then we save them in a list.
 -- We can then use a doQuery to fetch the values,
@@ -698,7 +737,7 @@ appendOutputBindBuffer stmt buffer = do
 
 
 class OracleBind a where
-  bindWithValue :: a -> (Ptr Word8 -> IO ()) -> IO ()
+  bindWithValue :: a -> (Ptr Word8 -> IO b) -> IO b
   bindWriteBuffer :: Ptr Word8 -> a -> IO ()
   bindDataSize :: a -> Int
   bindBufferSize :: a -> Int
@@ -726,12 +765,15 @@ instance OracleBind a => OracleBind (Maybe a) where
 
 instance OracleBind String where
   -- FIXME  should these be withUTF8String{Len} ?
-  bindWithValue v a = withCString v (\p -> a (castPtr p))
+  bindWithValue v a = withArray (ByteString.unpack . BSUTF8.fromString $ v) (\p -> a (castPtr p))
+  -- bindWithValue v a = withCString v (\p -> a (castPtr p))
   bindWriteBuffer b s = withCStringLen s (\(p,l) ->
     copyBytes (castPtr b) p (1+l))
-  bindDataSize s = fromIntegral (length s)
+  -- bindDataSize s = fromIntegral (length s)
+  bindDataSize s = fromIntegral (length . ByteString.unpack . BSUTF8.fromString $ s)
   bindBufferSize _ = 32000
-  bindType _ = oci_SQLT_CHR
+  -- bindType _ = oci_SQLT_CHR
+  bindType _ = oci_SQLT_AFC
 
 instance OracleBind Int where
   bindWithValue v a = withBinaryValue toCInt v (\p v -> poke (castPtr p) v) a
@@ -767,8 +809,8 @@ withBinaryValue :: (OracleBind b) =>
   (b -> a)  -- ^ convert Haskell value to C value
   -> b      -- ^ value to convert (we call bindSize on this value to get buffer size)
   -> (Ptr Word8 -> a -> IO ())  -- ^ action to place converted value into buffer
-  -> (Ptr Word8 -> IO ())       -- ^ action to run over buffer; buffer will be freed on completion
-  -> IO ()
+  -> (Ptr Word8 -> IO c)       -- ^ action to run over buffer; buffer will be freed on completion
+  -> IO c
 withBinaryValue fn v pok action =
   -- FIXME  is bindBufferSize better here?
   --allocaBytes (bindBufferSize v) $ \p -> do
@@ -877,7 +919,7 @@ instance Statement CommandBind Session Query where
   makeQuery sess (CommandBind sqltext bas) = do
     let
      (PreparationA action) =
-        prepareStmt' 1 sqltext FreeWithQuery CommandType
+        prepareStmt' 1 sqltext FreeWithQuery (CommandType 1)
     pstmt <- action sess
     sequence_ (zipWith (\i (BindA ba) -> ba sess pstmt i) [1..] bas)
     execute sess (stmtHandle pstmt) 1

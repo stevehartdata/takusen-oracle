@@ -541,7 +541,30 @@ sbph ('\'':cs) i inQuote acc = sbph cs i (not inQuote) ('\'':acc)
 sbph ('?':cs) i False acc = sbph cs (i+1) False ((reverse (show i)) ++ (':':acc))
 sbph (c:cs) i inQuote acc = sbph cs i inQuote (c:acc)
 
-
+bindByPosArr ::
+  ErrorHandle
+  -> StmtHandle
+  -> Int  -- ^ Position
+  -> [Word8] -- ^ payload (array)
+  -> Int  -- ^ max elem size
+  -> CInt  -- ^ SQL Datatype
+  -> [CShort]  -- ^ Null ind
+  -> [Int]  -- ^ actual element lengths
+  -> IO [IO ()]
+bindByPosArr err stmt pos listWord8 maxSze sqltype nullInd elemLens = do
+  with (nullPtr :: BindHandle) $ \bindHdlPtr -> do
+    nullIndArr <- newArray (map fromIntegral nullInd)
+    elemLensArr <- newArray (map fromIntegral elemLens)
+    arrptr <- newArray $ listWord8
+    rc <- ociBindByPos stmt bindHdlPtr err (fromIntegral pos) (castPtr arrptr)
+        (fromIntegral maxSze) (fromIntegral sqltype)
+        nullIndArr elemLensArr nullPtr 0 nullPtr (fromIntegral oci_DEFAULT)
+    testForError rc "bindOutputByPos" ()
+    let maxDataSize = fromIntegral maxSze :: CInt
+    maxDataSizePtr <- new maxDataSize
+    bindHdl <- peek bindHdlPtr
+    setHandleAttr err (castPtr bindHdl) oci_HTYPE_BIND maxDataSizePtr oci_ATTR_MAXDATA_SIZE 
+    return [free nullIndArr, free elemLensArr, free arrptr]
 
 bindByPos ::
   ErrorHandle
@@ -551,7 +574,7 @@ bindByPos ::
   -> BufferPtr  -- ^ payload
   -> Int   -- ^ payload size in bytes
   -> CInt  -- ^ SQL Datatype (from "Database.Oracle.OCIConstants")
-  -> IO ()
+  -> IO [IO ()]
 bindByPos err stmt pos nullInd bufptr sze sqltype = do
   indFPtr <- mallocForeignPtr
   sizeFPtr <- mallocForeignPtr
@@ -562,7 +585,7 @@ bindByPos err stmt pos nullInd bufptr sze sqltype = do
   withForeignPtr sizeFPtr $ \p -> poke p (fromIntegral sze)
   bufFPtr <- newForeignPtr_ bufptr
   bindOutputByPos err stmt pos (indFPtr, bufFPtr, sizeFPtr) sze sqltype
-  return ()
+  return []
 
 -- Note that this function takes a ForeignPtr to the output-size
 -- (in the triple) and also a size parameter, which is the input size.

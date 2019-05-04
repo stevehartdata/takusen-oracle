@@ -7,6 +7,8 @@ resolver: lts-7.8
 packages:
 - '.'
 - Example/
+- bytestring
+- utf8-string
 
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 extra-deps: []
@@ -20,8 +22,7 @@ flags:
 extra-package-dbs: []
 
 # specify the oracle directory with libraries
-extra-lib-dirs:
- - /Users/paul/instantclient
+extra-lib-dirs: []
 
 # Control whether we use the GHC we find on the path
 # system-ghc: true

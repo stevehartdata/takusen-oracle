@@ -73,7 +73,9 @@ oci_THREADED = 1
   , oci_ATTR_PREFETCH_ROWS
   , oci_ATTR_USERNAME
   , oci_ATTR_PASSWORD
-  ] = [5,6,7,8,9,11,22,23] :: [CInt]
+  , oci_ATTR_MAXDATA_SIZE
+  , oci_ATTR_MAXCHAR_SIZE
+  ] = [5,6,7,8,9,11,22,23,33,163] :: [CInt]
 
 -- ** Authentication options:
 
