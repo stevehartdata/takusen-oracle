@@ -905,6 +905,7 @@ instance Statement (NextResultSet mark PreparedStmtObj) Session Query where
     writeIORef (stmtCursors pstmt) (tail cursors)
     makeQuery sess (head cursors)
 
+-- TODO: These next two instances should probably call bindRun
 instance Statement QueryStringTuned Session Query where
   makeQuery sess (QueryStringTuned resUsage sqltext bas) = do
     let
