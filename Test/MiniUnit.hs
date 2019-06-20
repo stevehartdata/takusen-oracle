@@ -40,7 +40,7 @@ data TestResult = TestSuccess | TestFailure String | TestException String
 
 -- We'll use HUnit's trick of throwing an IOError when an assertion fails.
 -- This will terminate the test case, obviously, but we catch the exception
--- and record that it haa failed so that we can continue with other
+-- and record that it has failed so that we can continue with other
 -- test cases.
 
 -- Unlike HUnit, we catch all exceptions; any that are not thrown by

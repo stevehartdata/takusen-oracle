@@ -9,7 +9,7 @@
 
 -- Oracle OCI implementation of Database.Enumerator.
 
-
+{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}

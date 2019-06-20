@@ -33,7 +33,7 @@ MyShow requires overlapping AND undecidable instances.
 -}
 
 class Show a => MyShow a where show_ :: a -> String
-instance MyShow String where show_ s = s
+instance {-# OVERLAPPING #-} MyShow String where show_ s = s
 instance (Show a) => MyShow a where show_ = show
 
 -- Like 'System.IO.print', except that Strings are not escaped or quoted.

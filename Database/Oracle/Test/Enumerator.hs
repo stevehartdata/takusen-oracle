@@ -48,6 +48,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module Database.Oracle.Test.Enumerator (runTest) where
 
 import qualified Database.Oracle.Test.OCIFunctions as Low
@@ -239,16 +241,16 @@ makeFixtureMultiResultSet4 = "CREATE OR REPLACE PROCEDURE takusenTestProc"
 selectMultiResultSet _ = do
   let refcursor :: Maybe StmtHandle; refcursor = Just undefined
   withTransaction RepeatableRead $ do
-  withPreparedStatement (prepareCommand (sql "begin takusenTestProc(:1,:2); end;")) $ \pstmt -> do
-  withBoundStatement pstmt [bindP (Out refcursor), bindP (Out refcursor)] $ \bstmt -> do
-    dummy <- doQuery bstmt iterMain ()
-    result1 <- doQuery (NextResultSet pstmt) iterRS1 []
-    assertEqual "selectMultiResultSet: RS1" [1,4,9,16,25,36,49,64,81] result1
-    result2 <- doQuery (NextResultSet pstmt) iterRS2 []
-    let expect = [(1,1,1),(2,4,8),(3,9,27),(4,16,64),(5,25,125),(6,36,216)
-          ,(7,49,343),(8,64,512),(9,81,729)]
-    assertEqual "selectMultiResultSet: RS2" expect result2
-    return ()
+    withPreparedStatement (prepareCommand (sql "begin takusenTestProc(:1,:2); end;")) $ \pstmt -> do
+      withBoundStatement pstmt [bindP (Out refcursor), bindP (Out refcursor)] $ \bstmt -> do
+        dummy <- doQuery bstmt iterMain ()
+        result1 <- doQuery (NextResultSet pstmt) iterRS1 []
+        assertEqual "selectMultiResultSet: RS1" [1,4,9,16,25,36,49,64,81] result1
+        result2 <- doQuery (NextResultSet pstmt) iterRS2 []
+        let expect = [(1,1,1),(2,4,8),(3,9,27),(4,16,64),(5,25,125),(6,36,216)
+              ,(7,49,343),(8,64,512),(9,81,729)]
+        assertEqual "selectMultiResultSet: RS2" expect result2
+        return ()
   where
     iterMain :: (Monad m) => RefCursor StmtHandle -> RefCursor StmtHandle -> IterAct m ()
     iterMain c1 c2 acc = return (Left acc)
@@ -275,10 +277,10 @@ selectNestedMultiResultSet _ = do
       result' (i:acc)
     in
       withTransaction RepeatableRead $ do
-      withPreparedStatement (prepareQuery (sql q)) $ \pstmt -> do
-      withBoundStatement pstmt [] $ \bstmt -> do
-          rs <- doQuery bstmt iterMain []
-          return ()
+        withPreparedStatement (prepareQuery (sql q)) $ \pstmt -> do
+          withBoundStatement pstmt [] $ \bstmt -> do
+            rs <- doQuery bstmt iterMain []
+            return ()
 
 
 selectNestedMultiResultSet2 :: OracleFunctions -> DBM mark Session ()

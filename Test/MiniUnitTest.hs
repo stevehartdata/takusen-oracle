@@ -5,8 +5,9 @@ module Test.MiniUnitTest where
 
 import Test.MiniUnit
 import Data.IORef
+import Control.Exception (SomeException)
 import Control.Exception.MonadIO
-import Control.Monad.Trans (liftIO)
+import Control.Monad.Trans (liftIO, MonadIO)
 
 
 tests = do
@@ -22,10 +23,11 @@ tests = do
 
 print_ s = liftIO (putStrLn s)
 
-test__assertFailure = catch
+test__assertFailure = gcatch
   (assertFailure "test__assertFailure"
     >> error "test__assertFailure: failed: exception not thrown.")
-  (\e -> print_ "test__assertFailure OK")
+  ((\e -> print_ "test__assertFailure OK")
+      :: (MonadIO m) => SomeException -> m ())
 
 reportResult name result = do
   case result of
@@ -55,7 +57,6 @@ test__reportResults = do
   if reportResults results == expect
     then print_ "test__reportResults OK"
     else print_ "test__reportResults failed!"
-
 
 test__runTestTT = do
   r <- runTestTT "MiniUnitTest" [assertFailure "test__runSingleTest", return (), throwUserError "boo"]
