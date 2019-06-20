@@ -10,7 +10,6 @@
 -- Oracle OCI implementation of Database.Enumerator.
 
 
-{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -580,10 +579,10 @@ instance IPrepared PreparedStmtObj Session BoundStmt BindObj where
     action (BoundStmt stmt)
   destroyStmt sess pstmt = closeStmt sess (stmtHandle pstmt)
 
-instance DBBind (Maybe String) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Maybe String) Session PreparedStmtObj BindObj where
   bindP = makeBindAction
 
-instance DBBind (Out (Maybe String)) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Out (Maybe String)) Session PreparedStmtObj BindObj where
   bindP (Out v) = makeOutputBindAction v
 
 instance DBBind (Maybe Int) Session PreparedStmtObj BindObj where
@@ -627,7 +626,7 @@ instance DBBind (Out (Maybe StmtHandle)) Session PreparedStmtObj BindObj where
 
 -- Instances for non-Maybe types i.e. bare Int, Double, String, etc.
 
-instance DBBind (Maybe a) Session PreparedStmtObj BindObj
+instance {-# OVERLAPPING #-} DBBind (Maybe a) Session PreparedStmtObj BindObj
     => DBBind a Session PreparedStmtObj BindObj where
   bindP x = bindP (Just x)
 
