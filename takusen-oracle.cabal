@@ -9,7 +9,7 @@ Stability:      experimental
 Homepage:       https://github.com/paulrzcz/takusen-oracle.git
 Package-url:    https://github.com/paulrzcz/takusen-oracle.git
 Category:       Database
-Build-type:     Custom
+Build-type:     Simple
 Cabal-Version:  >= 1.16
 Synopsis:       Database library with left-fold interface for Oracle.
 Description:
