@@ -42,7 +42,7 @@ Just as with ensuring that your path is correctly set when building Takusen,
 you must also ensure it is correctly set when building your programs.
 If it is not correct, then you are likely to see linker errors.
 
-For successful building of the library, you should set `Extra-Lib-Dirs` to your Oracle home lib directory.
+For successful building of the library, you should add your Oracle home lib directory to your platform's library search path. On Windows, the MinGW linker is used, so you can add the directory to your colon-separated LIBRARY_PATH.
 
 Oracle gotchas on Windows
 -------------------------

@@ -19,10 +19,6 @@ flags:
 # Extra package databases containing global packages
 extra-package-dbs: []
 
-# specify the oracle directory with libraries
-extra-lib-dirs:
- - /Users/paul/instantclient
-
 # Control whether we use the GHC we find on the path
 # system-ghc: true
 
