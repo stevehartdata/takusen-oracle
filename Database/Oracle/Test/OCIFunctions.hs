@@ -88,7 +88,6 @@ logoff (env, err, conn) = OCI.catchOCI ( do
     OCI.handleFree oci_HTYPE_SVCCTX (castPtr conn)
     OCI.handleFree oci_HTYPE_ERROR (castPtr err)
     OCI.handleFree oci_HTYPE_ENV (castPtr env)
-    OCI.terminate
   ) (\ociexc -> reportAndIgnore (castPtr err) ociexc nullAction)
 
 
