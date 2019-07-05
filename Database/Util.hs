@@ -11,6 +11,7 @@ Utility functions. Mostly used in database back-ends, and tests.
 
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Database.Util where
