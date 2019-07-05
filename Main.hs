@@ -1,5 +1,3 @@
-{-# LANGUAGE OverlappingInstances #-}
-
 -- |
 -- Module      :  Main
 -- Copyright   :  (c) 2004 Oleg Kiselyov, Alistair Bayley

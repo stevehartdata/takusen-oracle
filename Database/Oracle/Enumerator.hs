@@ -9,7 +9,6 @@
 
 -- Oracle OCI implementation of Database.Enumerator.
 
-{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -579,16 +578,16 @@ instance IPrepared PreparedStmtObj Session BoundStmt BindObj where
     action (BoundStmt stmt)
   destroyStmt sess pstmt = closeStmt sess (stmtHandle pstmt)
 
-instance DBBind (Maybe String) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Maybe String) Session PreparedStmtObj BindObj where
   bindP = makeBindAction
 
-instance DBBind (Out (Maybe String)) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Out (Maybe String)) Session PreparedStmtObj BindObj where
   bindP (Out v) = makeOutputBindAction v
 
-instance DBBind (Maybe Int) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Maybe Int) Session PreparedStmtObj BindObj where
   bindP = makeBindAction
 
-instance DBBind (Out (Maybe Int)) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Out (Maybe Int)) Session PreparedStmtObj BindObj where
   bindP (Out v) = makeOutputBindAction v
 
 -- I don't think Oracle supports int64 in v8i's OCI API...
@@ -596,19 +595,19 @@ instance DBBind (Out (Maybe Int)) Session PreparedStmtObj BindObj where
 --  instance DBBind (Maybe Int64) Session PreparedStmtObj BindObj where
 --    bindP = makeBindAction
 
-instance DBBind (Maybe Double) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Maybe Double) Session PreparedStmtObj BindObj where
   bindP = makeBindAction
 
-instance DBBind (Out (Maybe Double)) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Out (Maybe Double)) Session PreparedStmtObj BindObj where
   bindP (Out v) = makeOutputBindAction v
 
-instance DBBind (Maybe CalendarTime) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Maybe CalendarTime) Session PreparedStmtObj BindObj where
   bindP = makeBindAction
 
-instance DBBind (Maybe UTCTime) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Maybe UTCTime) Session PreparedStmtObj BindObj where
   bindP = makeBindAction
 
-instance DBBind (Out (Maybe UTCTime)) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Out (Maybe UTCTime)) Session PreparedStmtObj BindObj where
   bindP (Out v) = makeOutputBindAction v
 
 -- StmtHandles (i.e. RefCursors) are output only, I think
@@ -616,7 +615,7 @@ instance DBBind (Out (Maybe UTCTime)) Session PreparedStmtObj BindObj where
 -- We create the StmtHandle here, so the user doesn't have to
 -- (is this a bad idea?...)
 
-instance DBBind (Out (Maybe StmtHandle)) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} DBBind (Out (Maybe StmtHandle)) Session PreparedStmtObj BindObj where
   bindP (Out v) = BindA (\sess stmt pos -> do
       stmt2 <- getStmt sess
       bindOutputMaybe sess stmt (Just stmt2) pos
@@ -630,17 +629,19 @@ instance DBBind (Maybe a) Session PreparedStmtObj BindObj
     => DBBind a Session PreparedStmtObj BindObj where
   bindP x = bindP (Just x)
 
-instance DBBind (Out (Maybe a)) Session PreparedStmtObj BindObj
+instance {-# OVERLAPPING #-} DBBind (Out (Maybe a)) Session PreparedStmtObj BindObj
     => DBBind (Out a) Session PreparedStmtObj BindObj where
   bindP (Out x) = bindP (Out (Just x))
 
 -- Default instances, using generic Show.
 
-instance (Show a) => DBBind (Maybe a) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} (Show a)
+    => DBBind (Maybe a) Session PreparedStmtObj BindObj where
   bindP (Just x) = bindP (Just (show x))
   bindP Nothing = bindP (Nothing `asTypeOf` Just "")
 
-instance (Show a) => DBBind (Out (Maybe a)) Session PreparedStmtObj BindObj where
+instance {-# OVERLAPPING #-} (Show a)
+    => DBBind (Out (Maybe a)) Session PreparedStmtObj BindObj where
   bindP (Out (Just x)) = bindP (Out (Just (show x)))
   bindP (Out Nothing) = bindP (Out (Nothing `asTypeOf` Just ""))
 
@@ -1002,7 +1003,7 @@ bufferToStmtHandle buffer = do
 -- of 100 or so) on the number of open cursors, so perhaps space
 -- leaks aren't as likely as I think.
 
-instance DBType (RefCursor StmtHandle) Query ColumnBuffer where
+instance  {-# OVERLAPPING #-} DBType (RefCursor StmtHandle) Query ColumnBuffer where
   allocBufferFor _ q n = allocStmtBuffer q n
   fetchCol q buffer = do
     rawstmt <- OCI.bufferToStmtHandle (colBufBufferFPtr buffer)
@@ -1017,23 +1018,23 @@ appendRefCursor query refc = do
   return refc
 
 
-instance DBType (Maybe String) Query ColumnBuffer where
+instance {-# OVERLAPPING #-} DBType (Maybe String) Query ColumnBuffer where
   allocBufferFor _ q n = allocBuffer q (16000, oci_SQLT_CHR) n
   fetchCol q buffer = bufferToString buffer
 
-instance DBType (Maybe Int) Query ColumnBuffer where
+instance {-# OVERLAPPING #-} DBType (Maybe Int) Query ColumnBuffer where
   allocBufferFor _ q n = allocBuffer q (4, oci_SQLT_INT) n
   fetchCol q buffer = bufferToInt buffer
 
-instance DBType (Maybe Double) Query ColumnBuffer where
+instance {-# OVERLAPPING #-} DBType (Maybe Double) Query ColumnBuffer where
   allocBufferFor _ q n = allocBuffer q (8, oci_SQLT_FLT) n
   fetchCol q buffer = bufferToDouble buffer
 
-instance DBType (Maybe UTCTime) Query ColumnBuffer where
+instance {-# OVERLAPPING #-} DBType (Maybe UTCTime) Query ColumnBuffer where
   allocBufferFor _ q n = allocBuffer q (7, oci_SQLT_DAT) n
   fetchCol q buffer = bufferToUTCTime buffer
 
-instance DBType (Maybe CalendarTime) Query ColumnBuffer where
+instance {-# OVERLAPPING #-} DBType (Maybe CalendarTime) Query ColumnBuffer where
   allocBufferFor _ q n = allocBuffer q (7, oci_SQLT_DAT) n
   fetchCol q buffer = bufferToCaltime buffer
 
@@ -1053,7 +1054,8 @@ buffer_pos q buffer = do
 -- |A polymorphic instance which assumes that the value is in a String column,
 -- and uses Read to convert the String to a Haskell data value.
 
-instance (Show a, Read a) => DBType (Maybe a) Query ColumnBuffer where
+instance {-# OVERLAPPING #-} (Show a, Read a)
+    => DBType (Maybe a) Query ColumnBuffer where
   allocBufferFor _ q n = allocBuffer q (16000, oci_SQLT_CHR) n
   fetchCol q buffer = do
     v <- bufferToString buffer

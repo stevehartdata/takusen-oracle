@@ -41,7 +41,6 @@
 -- from t_natural nat where n < 10 order by n;
 
 
-{-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
